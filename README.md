@@ -147,3 +147,49 @@ Privado - Uso interno.
 ---
 
 **Estado**: ✅ En producción (v2gitano.luxom.com.ar)
+
+---
+
+## 📦 PAQUETE ADS MANAGER (PARA OTRA INSTANCIA OPENCLAW)
+
+### Descripción
+Archivo comprimido con todo el código fuente de AdsManager/AdsPro para que otra instancia OpenClaw trabaje en paralelo.
+
+### Contenido
+- `adsmanager-git/` - Código fuente completo (Laravel)
+- `DEPLOY.md` - Instrucciones de despliegue y credenciales
+- `WORKSPACE_SUMMARY.md` - Contexto completo del workspace
+- `INSTALL_INSTRUCTIONS.txt` - Guía rápida
+
+### Cómo usar
+1. **Descargar el archivo:**
+   ```bash
+   wget https://raw.githubusercontent.com/MaroteMSPro/newgitano/main/adsmanager-complete.tar.gz
+   ```
+
+2. **Extraer:**
+   ```bash
+   tar -xzf adsmanager-complete.tar.gz
+   ```
+
+3. **Leer instrucciones:**
+   ```bash
+   cat INSTALL_INSTRUCTIONS.txt
+   ```
+
+### Estado actual del proyecto
+- ✅ App desplegada en https://adsmanager.luxom.com.ar
+- ✅ Login admin funciona (admin@adspro.com / admin)
+- ✅ WhatsApp QR scanning OK
+- ✅ CSRF 419 fixeado
+- ❌ **PROBLEMA:** Meta Ads muestra "Conectar con Meta" en lugar de "Configurar Meta App"
+
+### Credenciales servidor
+- **Host:** 89.117.7.38:65002
+- **User:** u695160153
+- **Pass:** @@Luxom00102
+- **Ruta:** `/home/u695160153/domains/luxom.com.ar/public_html/adsmanager/`
+
+---
+
+*Paquete AdsManager generado el 2026-04-16 por Betapache 🛠️*
