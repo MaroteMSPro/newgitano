@@ -1,0 +1,26 @@
+Options -MultiViews
+RewriteEngine On
+
+# Block direct access to ALL sensitive PHP/config files
+<FilesMatch "^(license\.php|\.env.*|config\.php)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Block src/ and database/ directories
+RewriteRule ^(src|database)/ - [F,L]
+
+# API routing
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^api/ index.php [QSA,L]
+
+# SPA — frontend
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_URI} !^/api/
+RewriteRule ^ app.html [QSA,L]
+
+# Security headers
+Header always set X-Content-Type-Options nosniff
+Header always set X-Frame-Options SAMEORIGIN
+Header always set X-XSS-Protection "1; mode=block"

@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exportar WA — CRM</title>
+    <style>
+        :root {
+            --bg: #0f172a; --surface: #1e293b; --border: #334155;
+            --text: #e2e8f0; --muted: #94a3b8; --primary: #25d366;
+            --danger: #ef4444; --warning: #f59e0b; --info: #3b82f6;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; font-size: 14px; min-height: 100vh; }
+
+        /* Login overlay */
+        #login-overlay {
+            position: fixed; inset: 0; background: var(--bg);
+            display: flex; align-items: center; justify-content: center; z-index: 100;
+        }
+        .login-box {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 14px; padding: 32px; width: 340px; text-align: center;
+        }
+        .login-box h2 { font-size: 20px; margin-bottom: 6px; }
+        .login-box p { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+        .login-box input {
+            width: 100%; background: var(--bg); border: 1px solid var(--border);
+            color: var(--text); border-radius: 8px; padding: 10px 12px;
+            font-size: 14px; margin-bottom: 12px;
+        }
+        .login-box input:focus { outline: none; border-color: var(--primary); }
+
+        /* Layout */
+        .header {
+            background: var(--surface); border-bottom: 1px solid var(--border);
+            padding: 14px 24px; display: flex; align-items: center; gap: 12px;
+        }
+        .header h1 { font-size: 18px; display: flex; align-items: center; gap: 8px; }
+        .header-user { margin-left: auto; color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 10px; }
+
+        .container { padding: 24px; max-width: 1200px; margin: 0 auto; }
+
+        /* Cards tabs */
+        .tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+        .tab {
+            padding: 9px 18px; border-radius: 8px; border: 1px solid var(--border);
+            background: var(--surface); color: var(--muted); cursor: pointer;
+            font-weight: 500; font-size: 13px; transition: all .15s;
+        }
+        .tab:hover { color: var(--text); }
+        .tab.active { background: var(--primary); color: #000; border-color: var(--primary); font-weight: 600; }
+
+        /* Panel */
+        .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+        .panel-header {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 16px; flex-wrap: wrap; gap: 10px;
+        }
+        .panel-title { font-size: 16px; font-weight: 600; }
+
+        /* Filtros */
+        .filtros { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 16px; }
+        .filtro-group { display: flex; flex-direction: column; gap: 4px; }
+        .filtro-group label { font-size: 11px; color: var(--muted); text-transform: uppercase; }
+        .filtro-group select, .filtro-group input {
+            background: var(--bg); border: 1px solid var(--border); color: var(--text);
+            border-radius: 6px; padding: 8px 10px; font-size: 13px; min-width: 180px;
+        }
+
+        /* Botones */
+        .btn {
+            padding: 8px 16px; border-radius: 7px; border: none; cursor: pointer;
+            font-size: 13px; font-weight: 500; display: inline-flex; align-items: center;
+            gap: 6px; transition: opacity .15s;
+        }
+        .btn:hover { opacity: .85; }
+        .btn:disabled { opacity: .4; cursor: not-allowed; }
+        .btn-primary { background: var(--info); color: #fff; }
+        .btn-green   { background: var(--primary); color: #000; }
+        .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+        .btn-danger  { background: var(--danger); color: #fff; }
+
+        /* Tabla */
+        .tabla-wrap { overflow: auto; border-radius: 8px; border: 1px solid var(--border); }
+        table { width: 100%; border-collapse: collapse; white-space: nowrap; }
+        thead th {
+            background: #0f172a; padding: 10px 12px; text-align: left;
+            font-size: 11px; text-transform: uppercase; color: var(--muted);
+            border-bottom: 1px solid var(--border);
+        }
+        tbody tr { border-bottom: 1px solid var(--border); }
+        tbody tr:last-child { border-bottom: none; }
+        tbody tr:hover { background: rgba(255,255,255,.03); }
+        tbody td { padding: 9px 12px; }
+
+        /* KPIs */
+        .kpis { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+        .kpi {
+            background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+            padding: 12px 18px; min-width: 120px;
+        }
+        .kpi-label { font-size: 11px; color: var(--muted); text-transform: uppercase; }
+        .kpi-value { font-size: 26px; font-weight: 700; color: var(--primary); }
+
+        /* Loading / empty */
+        .loading, .empty {
+            padding: 48px; text-align: center; color: var(--muted);
+            display: flex; align-items: center; justify-content: center; gap: 10px;
+        }
+        .spinner {
+            width: 18px; height: 18px; border: 2px solid var(--border);
+            border-top-color: var(--primary); border-radius: 50%;
+            animation: spin .7s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .badge {
+            display: inline-block; padding: 2px 8px; border-radius: 20px;
+            font-size: 11px; font-weight: 600;
+        }
+        .badge-grupo { background: rgba(59,130,246,.15); color: #60a5fa; }
+        .badge-ind   { background: rgba(37,211,102,.1); color: var(--primary); }
+        .badge-admin { background: rgba(245,158,11,.15); color: #fbbf24; }
+
+        #tab-contactos, #tab-chats, #tab-grupos { display: none; }
+    </style>
+</head>
+<body>
+
+<!-- Login overlay (si no hay token) -->
+<div id="login-overlay">
+    <div class="login-box">
+        <div style="font-size:32px;margin-bottom:8px;">💬</div>
+        <h2>Exportar WhatsApp</h2>
+        <p>Ingresá con tus credenciales del CRM</p>
+        <input type="text" id="l-user" placeholder="Usuario" autocomplete="username">
+        <input type="password" id="l-pass" placeholder="Contraseña" autocomplete="current-password">
+        <div id="l-error" style="color:var(--danger);font-size:12px;margin-bottom:10px;display:none;"></div>
+        <button class="btn btn-green" style="width:100%;justify-content:center;" onclick="doLogin()">Ingresar</button>
+    </div>
+</div>
+
+<!-- Header -->
+<div class="header">
+    <h1>💬 Exportar WhatsApp</h1>
+    <div class="header-user">
+        <span id="user-name"></span>
+        <button class="btn btn-outline" onclick="logout()" style="padding:5px 10px;font-size:12px;">Salir</button>
+    </div>
+</div>
+
+<div class="container">
+
+    <!-- Tabs -->
+    <div class="tabs">
+        <div class="tab active" onclick="showTab('contactos')">👤 Contactos</div>
+        <div class="tab" onclick="showTab('chats')">💬 Chats</div>
+        <div class="tab" onclick="showTab('grupos')">👥 Grupos</div>
+        <div class="tab" onclick="showTab('historial')">📜 Historial grupo</div>
+    </div>
+
+    <!-- ===== CONTACTOS ===== -->
+    <div id="tab-contactos">
+        <div class="panel">
+            <div class="panel-header">
+                <span class="panel-title">Contactos por instancia</span>
+            </div>
+            <div class="filtros">
+                <div class="filtro-group">
+                    <label>Instancia</label>
+                    <select id="c-instancia"></select>
+                </div>
+                <button class="btn btn-primary" onclick="cargarContactos()">🔍 Buscar</button>
+                <button class="btn btn-green" id="btn-csv-c" onclick="exportarContactosCsv()" disabled>⬇ Exportar CSV</button>
+            </div>
+            <div class="kpis">
+                <div class="kpi"><div class="kpi-label">Total</div><div class="kpi-value" id="k-c-total">—</div></div>
+            </div>
+            <div class="tabla-wrap">
+                <div id="tabla-contactos"><div class="empty">Seleccioná una instancia y buscá</div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== CHATS ===== -->
+    <div id="tab-chats">
+        <div class="panel">
+            <div class="panel-header">
+                <span class="panel-title">Chats activos</span>
+            </div>
+            <div class="filtros">
+                <div class="filtro-group">
+                    <label>Instancia</label>
+                    <select id="ch-instancia"></select>
+                </div>
+                <div class="filtro-group">
+                    <label>Tipo</label>
+                    <select id="ch-tipo">
+                        <option value="todos">Todos</option>
+                        <option value="individuales">Individuales</option>
+                        <option value="grupos">Solo grupos</option>
+                    </select>
+                </div>
+                <button class="btn btn-primary" onclick="cargarChats()">🔍 Buscar</button>
+            </div>
+            <div class="kpis">
+                <div class="kpi"><div class="kpi-label">Total chats</div><div class="kpi-value" id="k-ch-total">—</div></div>
+                <div class="kpi"><div class="kpi-label">Sin leer</div><div class="kpi-value" id="k-ch-unread" style="color:var(--warning);">—</div></div>
+            </div>
+            <div class="tabla-wrap">
+                <div id="tabla-chats"><div class="empty">Seleccioná una instancia y buscá</div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== HISTORIAL GRUPO ===== -->
+    <div id="tab-historial" style="display:none;">
+        <div class="panel">
+            <div class="panel-header">
+                <span class="panel-title">📜 Historial de mensajes de un grupo</span>
+            </div>
+            <div class="filtros">
+                <div class="filtro-group">
+                    <label>Instancia</label>
+                    <select id="h-instancia"></select>
+                </div>
+                <div class="filtro-group" style="flex:1;min-width:280px;">
+                    <label>JID del grupo <span style="color:var(--muted);font-size:10px;">(ej: 120363418761983565@g.us)</span></label>
+                    <input type="text" id="h-jid" placeholder="pegá el JID o seleccioná de la lista abajo" style="min-width:320px;">
+                </div>
+                <div class="filtro-group">
+                    <label>Mensajes por página</label>
+                    <select id="h-limit">
+                        <option value="100">100</option>
+                        <option value="250">250</option>
+                        <option value="500">500</option>
+                    </select>
+                </div>
+                <button class="btn btn-primary" onclick="cargarHistorial(1)">🔍 Buscar</button>
+                <button class="btn btn-green" id="btn-csv-h" onclick="exportarHistorialCsv()" disabled>⬇ CSV</button>
+            </div>
+            <!-- Lista rápida de grupos desde cache/historial -->
+            <div id="h-grupos-lista" style="margin-bottom:16px;display:block;">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
+                    <span style="font-size:12px;color:var(--muted);">Grupos guardados — clic para ver historial</span>
+                    <span id="h-cache-info" style="font-size:11px;color:var(--muted);"></span>
+                    <button class="btn btn-outline" style="font-size:11px;padding:4px 10px;" id="btn-rescan" onclick="reescanearGrupos()">🔄 Re-escanear todo</button>
+                    <button class="btn btn-outline" style="font-size:11px;padding:4px 10px;" onclick="actualizarMiembros()" id="btn-sync-members">👥 Actualizar miembros</button>
+                </div>
+                <!-- Barra de progreso del scan -->
+                <div id="h-scan-progress" style="display:none;margin-bottom:10px;">
+                    <div style="background:var(--border);border-radius:6px;height:6px;overflow:hidden;">
+                        <div id="h-progress-bar" style="height:100%;background:var(--primary);width:0%;transition:width .4s;"></div>
+                    </div>
+                    <span id="h-progress-text" style="font-size:11px;color:var(--muted);margin-top:4px;display:block;"></span>
+                </div>
+                <div id="h-grupos-chips" style="display:flex;gap:6px;flex-wrap:wrap;">
+                    <span style="color:var(--muted);font-size:12px;">Cargando...</span>
+                </div>
+            </div>
+            <!-- Búsqueda manual si el grupo no aparece en la lista -->
+            <details style="margin-bottom:14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px;">
+                <summary style="cursor:pointer;font-size:12px;color:var(--muted);">¿No encontrás el grupo? → Buscar por número de participante</summary>
+                <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:flex-end;">
+                    <div class="filtro-group">
+                        <label>Número (ej: 5491134142777)</label>
+                        <input type="text" id="h-buscar-numero" placeholder="54911..." style="min-width:200px;">
+                    </div>
+                    <button class="btn btn-outline" style="font-size:12px;" onclick="buscarGrupoPorNumero()">🔍 Buscar grupos</button>
+                </div>
+                <div id="h-resultados-busqueda" style="margin-top:8px;font-size:12px;color:var(--muted);"></div>
+            </details>
+
+            <div class="kpis">
+                <div class="kpi"><div class="kpi-label">Total mensajes</div><div class="kpi-value" id="k-h-total">—</div></div>
+                <div class="kpi"><div class="kpi-label">Páginas</div><div class="kpi-value" id="k-h-pages" style="color:var(--info);">—</div></div>
+            </div>
+            <!-- Paginación -->
+            <div id="h-paginacion" style="display:none;margin-bottom:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                <button class="btn btn-outline" id="h-btn-prev" onclick="cambiarPaginaH(-1)">← Anterior</button>
+                <span id="h-pag-info" style="color:var(--muted);font-size:13px;"></span>
+                <button class="btn btn-outline" id="h-btn-next" onclick="cambiarPaginaH(1)">Siguiente →</button>
+            </div>
+            <div class="tabla-wrap">
+                <div id="tabla-historial"><div class="empty">Ingresá el JID del grupo y buscá</div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== GRUPOS ===== -->
+    <div id="tab-grupos">
+        <div class="panel">
+            <div class="panel-header">
+                <span class="panel-title">Grupos de WhatsApp</span>
+            </div>
+            <div class="filtros">
+                <div class="filtro-group">
+                    <label>Instancia</label>
+                    <select id="g-instancia"></select>
+                </div>
+                <div class="filtro-group">
+                    <label>Participantes</label>
+                    <select id="g-participantes">
+                        <option value="0">Solo grupos</option>
+                        <option value="1">Con participantes</option>
+                    </select>
+                </div>
+                <button class="btn btn-primary" onclick="cargarGrupos()">🔍 Buscar</button>
+                <button class="btn btn-green" id="btn-csv-g" onclick="exportarGruposCsv()" disabled>⬇ Exportar CSV</button>
+            </div>
+            <div class="kpis">
+                <div class="kpi"><div class="kpi-label">Total grupos</div><div class="kpi-value" id="k-g-total">—</div></div>
+                <div class="kpi"><div class="kpi-label">Total miembros</div><div class="kpi-value" id="k-g-members">—</div></div>
+            </div>
+            <div class="tabla-wrap">
+                <div id="tabla-grupos"><div class="empty">Seleccioná una instancia y buscá</div></div>
+            </div>
+        </div>
+    </div>
+
+</div><!-- /container -->
+
+<script>
+// =============================================
+// CONFIG
+// =============================================
+const API_BASE = window.location.origin + window.location.pathname.replace('exportar-wa.html', '');
+let TOKEN = localStorage.getItem('crm_token') || sessionStorage.getItem('crm_token') || '';
+
+// =============================================
+// AUTH
+// =============================================
+async function init() {
+    if (!TOKEN) { showLogin(); return; }
+    try {
+        const me = await api('GET', '/api/auth/me');
+        document.getElementById('user-name').textContent = me.user?.nombre || me.nombre || '';
+        hideLogin();
+        await cargarInstancias();
+        showTab('contactos');
+    } catch(e) {
+        showLogin();
+    }
+}
+
+async function doLogin() {
+    const user = document.getElementById('l-user').value;
+    const pass = document.getElementById('l-pass').value;
+    const err  = document.getElementById('l-error');
+    err.style.display = 'none';
+    try {
+        const res = await fetch(API_BASE + 'api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ usuario: user, password: pass })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Error de login');
+        TOKEN = data.token;
+        localStorage.setItem('crm_token', TOKEN);
+        await init();
+    } catch(e) {
+        err.textContent = e.message;
+        err.style.display = 'block';
+    }
+}
+
+function logout() {
+    localStorage.removeItem('crm_token');
+    sessionStorage.removeItem('crm_token');
+    TOKEN = '';
+    showLogin();
+}
+
+function showLogin() { document.getElementById('login-overlay').style.display = 'flex'; }
+function hideLogin() { document.getElementById('login-overlay').style.display = 'none'; }
+
+// Enter en login
+['l-user','l-pass'].forEach(id => {
+    document.getElementById(id).addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+});
+
+// =============================================
+// API HELPER
+// =============================================
+async function api(method, path, params = {}) {
+    let url = API_BASE + path.replace(/^\//, '');
+    if (method === 'GET' && Object.keys(params).length) {
+        url += '?' + new URLSearchParams(params);
+    }
+    const res = await fetch(url, {
+        method,
+        headers: {
+            'Authorization': 'Bearer ' + TOKEN,
+            'Content-Type': 'application/json',
+        },
+        body: method !== 'GET' ? JSON.stringify(params) : undefined,
+    });
+    if (res.status === 401) { showLogin(); throw new Error('No autorizado'); }
+    return res.json();
+}
+
+// =============================================
+// INSTANCIAS
+// =============================================
+async function cargarInstancias() {
+    const data = await api('GET', '/api/export/instances');
+    const inst = data.instances || [];
+    ['c-instancia','ch-instancia','g-instancia','h-instancia'].forEach(id => {
+        const sel = document.getElementById(id);
+        sel.innerHTML = inst.map(i => `<option value="${i.id}">${i.nombre} (${i.instancia_id})</option>`).join('');
+    });
+}
+
+// =============================================
+// TABS
+// =============================================
+function showTab(tab) {
+    ['contactos','chats','grupos','historial'].forEach(t => {
+        document.getElementById('tab-' + t).style.display = t === tab ? 'block' : 'none';
+    });
+    document.querySelectorAll('.tab').forEach((el, i) => {
+        el.classList.toggle('active', ['contactos','chats','grupos','historial'][i] === tab);
+    });
+    // Al abrir historial, cargar lista de grupos
+    if (tab === 'historial') cargarGruposParaHistorial(false);
+}
+
+// =============================================
+// CONTACTOS
+// =============================================
+async function cargarContactos() {
+    const instId = document.getElementById('c-instancia').value;
+    document.getElementById('tabla-contactos').innerHTML = '<div class="loading"><div class="spinner"></div> Cargando contactos...</div>';
+    document.getElementById('btn-csv-c').disabled = true;
+
+    const data = await api('GET', '/api/export/contacts', { instance_id: instId });
+    const lista = data.contactos || [];
+    document.getElementById('k-c-total').textContent = data.total ?? lista.length;
+
+    if (!lista.length) {
+        document.getElementById('tabla-contactos').innerHTML = '<div class="empty">No se encontraron contactos</div>';
+        return;
+    }
+
+    let html = `<table><thead><tr><th>#</th><th>Número</th><th>Nombre</th><th>JID</th></tr></thead><tbody>`;
+    lista.forEach((c, i) => {
+        html += `<tr><td style="color:var(--muted)">${i+1}</td><td>${c.numero}</td><td>${c.nombre || '<span style="color:var(--muted)">—</span>'}</td><td style="font-size:11px;color:var(--muted)">${c.jid}</td></tr>`;
+    });
+    html += '</tbody></table>';
+    document.getElementById('tabla-contactos').innerHTML = html;
+    document.getElementById('btn-csv-c').disabled = false;
+}
+
+function exportarContactosCsv() {
+    const instId = document.getElementById('c-instancia').value;
+    window.location.href = API_BASE + `api/export/contacts/csv?instance_id=${instId}&_token=${TOKEN}`;
+}
+
+// =============================================
+// CHATS
+// =============================================
+async function cargarChats() {
+    const instId = document.getElementById('ch-instancia').value;
+    const tipo   = document.getElementById('ch-tipo').value;
+    document.getElementById('tabla-chats').innerHTML = '<div class="loading"><div class="spinner"></div> Cargando chats...</div>';
+
+    const data = await api('GET', '/api/export/chats', { instance_id: instId, tipo });
+    const lista = data.chats || [];
+
+    document.getElementById('k-ch-total').textContent  = data.total ?? lista.length;
+    document.getElementById('k-ch-unread').textContent = lista.reduce((s, c) => s + (parseInt(c.sin_leer)||0), 0);
+
+    if (!lista.length) {
+        document.getElementById('tabla-chats').innerHTML = '<div class="empty">No se encontraron chats</div>';
+        return;
+    }
+
+    let html = `<table><thead><tr><th>#</th><th>Nombre</th><th>Tipo</th><th>Sin leer</th><th>JID</th></tr></thead><tbody>`;
+    lista.forEach((c, i) => {
+        const badge = c.tipo === 'grupo' ? '<span class="badge badge-grupo">Grupo</span>' : '<span class="badge badge-ind">Individual</span>';
+        const unread = parseInt(c.sin_leer) > 0 ? `<span style="color:var(--warning);font-weight:600;">${c.sin_leer}</span>` : '—';
+        html += `<tr><td style="color:var(--muted)">${i+1}</td><td>${c.nombre}</td><td>${badge}</td><td>${unread}</td><td style="font-size:11px;color:var(--muted)">${c.jid}</td></tr>`;
+    });
+    html += '</tbody></table>';
+    document.getElementById('tabla-chats').innerHTML = html;
+}
+
+// =============================================
+// GRUPOS
+// =============================================
+async function cargarGrupos() {
+    const instId = document.getElementById('g-instancia').value;
+    const part   = document.getElementById('g-participantes').value;
+    document.getElementById('tabla-grupos').innerHTML = '<div class="loading"><div class="spinner"></div> Cargando grupos...</div>';
+    document.getElementById('btn-csv-g').disabled = true;
+
+    let data = await api('GET', '/api/export/groups', { instance_id: instId });
+    let lista = data.grupos || [];
+
+    // Si todos tienen size=0, obtener miembros en background y actualizar tabla
+    const sinSize = lista.every(g => !g.size || parseInt(g.size) === 0);
+    if (sinSize && lista.length) {
+        document.getElementById('tabla-grupos').innerHTML = '<div class="loading"><div class="spinner"></div> Obteniendo miembros...</div>';
+        try {
+            const sync = await api('POST', '/api/export/groups/sync-members', { instance_id: parseInt(instId) });
+            if (sync.ok) {
+                // Actualizar sizes localmente
+                sync.grupos.forEach(sg => {
+                    const g = lista.find(x => x.jid === sg.jid);
+                    if (g) g.size = sg.size;
+                });
+            }
+        } catch(e) { /* silenciar */ }
+    }
+
+    document.getElementById('k-g-total').textContent   = data.total ?? lista.length;
+    document.getElementById('k-g-members').textContent = lista.reduce((s, g) => s + (parseInt(g.size)||0), 0);
+
+    if (!lista.length) {
+        document.getElementById('tabla-grupos').innerHTML = '<div class="empty">No se encontraron grupos</div>';
+        return;
+    }
+
+    const conPart = part === '1';
+    let html = `<table><thead><tr><th>#</th><th>Nombre grupo</th><th>Miembros</th><th>Descripción</th>`;
+    if (conPart) html += `<th>Participantes</th>`;
+    html += `<th>JID</th></tr></thead><tbody>`;
+
+    lista.forEach((g, i) => {
+        html += `<tr>
+            <td style="color:var(--muted)">${i+1}</td>
+            <td style="font-weight:500;">${g.nombre || '—'}</td>
+            <td style="text-align:center;font-weight:600;">${g.size}</td>
+            <td style="font-size:12px;color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis">${g.descripcion || '—'}</td>`;
+        if (conPart) {
+            const parts = g.participantes || [];
+            const admins = parts.filter(p => p.admin).length;
+            html += `<td style="font-size:12px;">
+                ${parts.slice(0,5).map(p => `<span title="${p.jid}">${p.numero}${p.admin?'<span class="badge badge-admin" style="font-size:9px;margin-left:2px;">A</span>':''}</span>`).join(', ')}
+                ${parts.length > 5 ? `<span style="color:var(--muted)"> +${parts.length-5} más</span>` : ''}
+            </td>`;
+        }
+        html += `<td style="font-size:11px;color:var(--muted)">${g.jid}</td></tr>`;
+    });
+
+    html += '</tbody></table>';
+    document.getElementById('tabla-grupos').innerHTML = html;
+    document.getElementById('btn-csv-g').disabled = false;
+}
+
+function exportarGruposCsv() {
+    const instId = document.getElementById('g-instancia').value;
+    const part   = document.getElementById('g-participantes').value;
+    window.location.href = API_BASE + `api/export/groups/csv?instance_id=${instId}&participantes=${part}&_token=${TOKEN}`;
+}
+
+// =============================================
+// HISTORIAL DE GRUPO
+// =============================================
+let hPaginaActual = 1;
+let hPaginasTotal = 1;
+let hGruposDetectados = [];
+
+async function cargarGruposParaHistorial(force = false) {
+    const chips  = document.getElementById('h-grupos-chips');
+    const instId = document.getElementById('h-instancia').value;
+    if (!instId) return;
+
+    chips.innerHTML = '<span style="color:var(--muted);font-size:12px;">⏳ Cargando...</span>';
+    document.getElementById('h-scan-progress').style.display = 'none';
+
+    try {
+        const params = { instance_id: instId };
+        if (force) params.sync = '1';
+        const data = await api('GET', '/api/export/groups', params);
+        hGruposDetectados = data.grupos || [];
+        renderChipsGrupos();
+
+        if (data.scanning && data.next_page) {
+            // Hay más páginas para escanear → continuar en background
+            actualizarProgreso(data.current_page, data.total_pages);
+            await continuarScan(instId, data.next_page, data.total_pages);
+        } else {
+            document.getElementById('h-scan-progress').style.display = 'none';
+            const cacheInfo = document.getElementById('h-cache-info');
+            if (data.from_cache) {
+                cacheInfo.textContent = `📦 cache · ${hGruposDetectados.length} grupos`;
+            } else {
+                cacheInfo.textContent = `✅ escaneado · ${hGruposDetectados.length} grupos`;
+            }
+        }
+    } catch(e) {
+        chips.innerHTML = '<span style="color:var(--danger);font-size:12px;">Error al cargar grupos</span>';
+    }
+}
+
+function actualizarProgreso(currentPage, totalPages) {
+    const prog = document.getElementById('h-scan-progress');
+    const bar  = document.getElementById('h-progress-bar');
+    const txt  = document.getElementById('h-progress-text');
+    prog.style.display = 'block';
+    const pct = Math.round((currentPage / totalPages) * 100);
+    bar.style.width = pct + '%';
+    txt.textContent = `🔍 Escaneando historial... ${currentPage}/${totalPages} páginas · ${hGruposDetectados.length} grupos encontrados`;
+    document.getElementById('h-cache-info').textContent = '';
+}
+
+async function continuarScan(instId, nextPage, totalPages) {
+    // Generar todos los chunks pendientes
+    const CHUNK = 15;
+    const PARALELOS = 5; // requests simultáneos
+    const chunks = [];
+    for (let p = nextPage; p <= totalPages; p += CHUNK) {
+        chunks.push(p);
+    }
+
+    // Procesar en batches paralelos
+    for (let i = 0; i < chunks.length; i += PARALELOS) {
+        const batch = chunks.slice(i, i + PARALELOS);
+        const promises = batch.map(p =>
+            api('GET', '/api/export/groups', { instance_id: instId, scan_page: p })
+              .catch(() => ({ grupos: [] }))
+        );
+        const results = await Promise.all(promises);
+        results.forEach(data => {
+            (data.grupos || []).forEach(g => {
+                if (!hGruposDetectados.find(x => x.jid === g.jid)) {
+                    hGruposDetectados.push(g);
+                }
+            });
+        });
+        renderChipsGrupos();
+        // Progreso basado en cuántos chunks procesamos
+        const done = Math.min(i + PARALELOS, chunks.length);
+        const pct  = Math.round(((nextPage - 1 + done * CHUNK) / totalPages) * 100);
+        document.getElementById('h-progress-bar').style.width = Math.min(pct, 100) + '%';
+        document.getElementById('h-progress-text').textContent =
+            `🔍 Escaneando... ${Math.min(done * CHUNK + nextPage - 1, totalPages)}/${totalPages} páginas · ${hGruposDetectados.length} grupos`;
+        // Pausa entre batches para no saturar la API
+        await new Promise(r => setTimeout(r, 300));
+    }
+
+    document.getElementById('h-scan-progress').style.display = 'none';
+    document.getElementById('h-cache-info').textContent = `✅ Scan completo · ${hGruposDetectados.length} grupos`;
+    document.getElementById('btn-rescan').disabled = false;
+    document.getElementById('btn-rescan').textContent = '🔄 Re-escanear todo';
+}
+
+function renderChipsGrupos() {
+    const instId = document.getElementById('h-instancia').value;
+    document.getElementById('h-grupos-chips').innerHTML = hGruposDetectados.map(g => {
+        const label = (g.nombre && g.nombre !== g.jid) ? g.nombre : g.jid.replace('@g.us','');
+        return `<div style="display:inline-flex;align-items:center;gap:3px;">
+            <button class="btn btn-outline" style="font-size:11px;padding:4px 10px;" onclick="seleccionarGrupo('${g.jid}')">
+                💬 ${label}
+            </button>
+            <button title="Renombrar" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:2px 4px;"
+                onclick="renombrarGrupo('${g.jid}','${label.replace(/'/g,"\\'")}','${instId}')">✏️</button>
+        </div>`;
+    }).join('');
+}
+
+async function reescanearGrupos() {
+    const btn    = document.getElementById('btn-rescan');
+    const instId = document.getElementById('h-instancia').value;
+    btn.disabled = true;
+    btn.textContent = '⏳ Escaneando...';
+
+    const progDiv = document.getElementById('h-scan-progress');
+    const progBar = document.getElementById('h-progress-bar');
+    const progTxt = document.getElementById('h-progress-text');
+    progDiv.style.display = 'block';
+    progBar.style.width = '0%';
+    progTxt.textContent = '🔍 Preparando scan...';
+
+    // Limpiar cache
+    await api('POST', '/api/export/groups/clear', { instance_id: parseInt(instId) }).catch(()=>{});
+    hGruposDetectados = [];
+    renderChipsGrupos();
+
+    // Obtener total de páginas con la página 1
+    let totalPages = 1;
+    try {
+        const first = await api('GET', '/api/export/groups/scan-page', { instance_id: instId, page: 1 });
+        totalPages = first.total_pages || 1;
+        // Mergear grupos de página 1
+        (first.jids || []).forEach(jid => {
+            if (!hGruposDetectados.find(x => x.jid === jid)) {
+                hGruposDetectados.push({ jid, nombre: jid, size: 0 });
+            }
+        });
+        renderChipsGrupos();
+    } catch(e) {
+        progTxt.textContent = '❌ Error en página 1: ' + e.message;
+        btn.disabled = false; btn.textContent = '🔄 Re-escanear todo';
+        return;
+    }
+
+    // Generar lista de páginas restantes
+    const paginas = [];
+    for (let p = 2; p <= totalPages; p++) paginas.push(p);
+
+    const PARALELOS = 20;
+    let procesadas = 1;
+
+    for (let i = 0; i < paginas.length; i += PARALELOS) {
+        const batch = paginas.slice(i, i + PARALELOS);
+        const promises = batch.map(p =>
+            api('GET', '/api/export/groups/scan-page', { instance_id: instId, page: p })
+              .catch(() => ({ jids: [] }))
+        );
+        const results = await Promise.all(promises);
+        results.forEach(r => {
+            (r.jids || []).forEach(jid => {
+                if (!hGruposDetectados.find(x => x.jid === jid)) {
+                    hGruposDetectados.push({ jid, nombre: jid, size: 0 });
+                }
+            });
+        });
+        procesadas += batch.length;
+        renderChipsGrupos();
+        const pct = Math.round((procesadas / totalPages) * 100);
+        progBar.style.width = pct + '%';
+        progTxt.textContent = `🔍 Escaneando ${procesadas}/${totalPages} páginas · ${hGruposDetectados.length} grupos encontrados`;
+        // Pequeña pausa para no saturar
+        await new Promise(r => setTimeout(r, 100));
+    }
+
+    progDiv.style.display = 'none';
+    document.getElementById('h-cache-info').textContent =
+        `✅ Scan completo · ${hGruposDetectados.length} grupos · ${totalPages} páginas`;
+    btn.disabled = false;
+    btn.textContent = '🔄 Re-escanear todo';
+}
+
+async function renombrarGrupo(jid, nombreActual, instId) {
+    const nuevo = prompt('Nombre para el grupo:', nombreActual);
+    if (!nuevo || nuevo.trim() === '') return;
+    try {
+        await api('POST', '/api/export/groups/rename', { instance_id: parseInt(instId), jid, nombre: nuevo.trim() });
+        // Actualizar local
+        const g = hGruposDetectados.find(x => x.jid === jid);
+        if (g) g.nombre = nuevo.trim();
+        renderChipsGrupos();
+    } catch(e) {
+        alert('Error al renombrar: ' + e.message);
+    }
+}
+
+function seleccionarGrupo(jid) {
+    document.getElementById('h-jid').value = jid;
+    cargarHistorial(1);
+}
+
+async function cargarHistorial(page) {
+    const instId = document.getElementById('h-instancia').value;
+    const jid    = document.getElementById('h-jid').value.trim();
+    const limit  = document.getElementById('h-limit').value;
+
+    if (!jid) { alert('Ingresá o seleccioná el JID del grupo'); return; }
+    if (!instId) { alert('Seleccioná una instancia primero'); return; }
+
+    hPaginaActual = page;
+    document.getElementById('tabla-historial').innerHTML =
+        '<div class="loading"><div class="spinner"></div> Cargando mensajes...</div>';
+    document.getElementById('btn-csv-h').disabled = true;
+
+    let data;
+    try {
+        data = await api('GET', '/api/export/group-history', {
+            instance_id: instId, jid, limit, page
+        });
+    } catch(e) {
+        document.getElementById('tabla-historial').innerHTML =
+            `<div class="empty" style="color:var(--danger)">Error: ${e.message}</div>`;
+        return;
+    }
+    if (data.error) {
+        document.getElementById('tabla-historial').innerHTML =
+            `<div class="empty" style="color:var(--danger)">Error: ${data.error}</div>`;
+        return;
+    }
+
+    const msgs = data.mensajes || [];
+    hPaginasTotal = data.pages || 1;
+    document.getElementById('k-h-total').textContent  = data.total ?? msgs.length;
+    document.getElementById('k-h-pages').textContent  = hPaginasTotal;
+
+    // Paginación
+    const pagDiv = document.getElementById('h-paginacion');
+    pagDiv.style.display = hPaginasTotal > 1 ? 'flex' : 'none';
+    document.getElementById('h-pag-info').textContent = `Página ${hPaginaActual} de ${hPaginasTotal}`;
+    document.getElementById('h-btn-prev').disabled = hPaginaActual <= 1;
+    document.getElementById('h-btn-next').disabled = hPaginaActual >= hPaginasTotal;
+
+    if (!msgs.length) {
+        document.getElementById('tabla-historial').innerHTML =
+            '<div class="empty">No se encontraron mensajes para este grupo</div>';
+        return;
+    }
+
+    let html = `<table><thead><tr>
+        <th>Fecha</th><th>Remitente</th><th>Mensaje</th><th>Tipo</th>
+    </tr></thead><tbody>`;
+
+    msgs.forEach(m => {
+        const quien = m.from_me
+            ? `<span style="color:var(--primary);font-weight:600;">Yo</span>`
+            : `<span title="${m.numero}">${m.nombre || m.numero}</span>`;
+        const texto = m.texto ? m.texto.replace(/</g,'&lt;').replace(/>/g,'&gt;') : '—';
+        html += `<tr>
+            <td style="white-space:nowrap;font-size:11px;color:var(--muted);">${m.fecha}</td>
+            <td style="white-space:nowrap;">${quien}</td>
+            <td style="white-space:normal;max-width:500px;word-break:break-word;">${texto}</td>
+            <td style="font-size:11px;color:var(--muted);">${m.tipo.replace('Message','')}</td>
+        </tr>`;
+    });
+
+    html += '</tbody></table>';
+    document.getElementById('tabla-historial').innerHTML = html;
+    document.getElementById('btn-csv-h').disabled = false;
+}
+
+function cambiarPaginaH(delta) {
+    const nuevaPag = hPaginaActual + delta;
+    if (nuevaPag < 1 || nuevaPag > hPaginasTotal) return;
+    cargarHistorial(nuevaPag);
+}
+
+function exportarHistorialCsv() {
+    const instId = document.getElementById('h-instancia').value;
+    const jid    = document.getElementById('h-jid').value.trim();
+    const limit  = document.getElementById('h-limit').value;
+    if (!jid) return;
+    window.location.href = API_BASE + `api/export/group-history/csv?instance_id=${instId}&jid=${encodeURIComponent(jid)}&limit=${limit}&page=1&_token=${TOKEN}`;
+}
+
+// =============================================
+// BUSCAR GRUPO POR NÚMERO DE PARTICIPANTE
+// =============================================
+async function buscarGrupoPorNumero() {
+    const instId  = document.getElementById('h-instancia').value;
+    const numero  = document.getElementById('h-buscar-numero').value.trim().replace(/\D/g,'');
+    const resDiv  = document.getElementById('h-resultados-busqueda');
+    if (!numero) { resDiv.textContent = 'Ingresá un número'; return; }
+    resDiv.innerHTML = '⏳ Buscando mensajes de ese número en grupos...';
+    try {
+        const data = await api('GET', '/api/export/search-groups-by-number', { instance_id: instId, numero });
+        const grupos = data.grupos || [];
+        if (!grupos.length) {
+            resDiv.textContent = '❌ No se encontraron grupos con ese número en el historial';
+            return;
+        }
+        resDiv.innerHTML = grupos.map(g => {
+            const label = (g.nombre && g.nombre !== g.jid) ? g.nombre : g.jid;
+            return `<button class="btn btn-outline" style="font-size:11px;padding:3px 8px;margin:2px;"
+                onclick="seleccionarGrupo('${g.jid}')">💬 ${label}</button>`;
+        }).join('') + ` <span style="color:var(--muted)">(${grupos.length} grupo${grupos.length!==1?'s':''})</span>`;
+        // Agregar a chips si no están
+        grupos.forEach(g => {
+            if (!hGruposDetectados.find(x => x.jid === g.jid)) {
+                hGruposDetectados.push(g);
+                renderChipsGrupos();
+            }
+        });
+    } catch(e) {
+        resDiv.textContent = 'Error: ' + e.message;
+    }
+}
+
+// Iniciar
+init();
+</script>
+</body>
+</html>

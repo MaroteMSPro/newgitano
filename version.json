@@ -1,0 +1,5 @@
+{
+  "version": "1.2.0",
+  "release_date": "2026-03-28",
+  "changelog": "Fix token expirado: script pre-Vue limpia localStorage si el JWT venció, forzando redirect a login correctamente."
+}
