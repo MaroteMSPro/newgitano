@@ -101,10 +101,11 @@ class CRMController
             $params[] = $instanciaId;
         }
 
-        // Filtro por usuario: no-admin ven sus leads o no-asignados
+        // Filtro por usuario: no-admin ven SOLO sus leads asignados
+        // (los sin asignar son del admin para repartir)
         $userRol = $_REQUEST['_user_rol'] ?? '';
         if ($userRol !== 'admin' && $userId > 0) {
-            $where[] = '(l.usuario_asignado_id = ? OR l.usuario_asignado_id IS NULL)';
+            $where[] = 'l.usuario_asignado_id = ?';
             $params[] = $userId;
         }
 
@@ -233,7 +234,7 @@ class CRMController
         $userRol = $_REQUEST['_user_rol'] ?? '';
         $statsWhere = '';
         if ($userRol !== 'admin' && $userId > 0) {
-            $statsWhere = " WHERE (usuario_asignado_id = ? OR usuario_asignado_id IS NULL)";
+            $statsWhere = " WHERE usuario_asignado_id = ?";
         }
         $stats = $pdo->query("
             SELECT 
@@ -540,7 +541,7 @@ class CRMController
                 FROM crm_leads l
                 LEFT JOIN crm_lead_etiquetas le ON le.lead_id = l.id
                 LEFT JOIN crm_etiquetas e ON le.etiqueta_id = e.id
-                WHERE (l.usuario_asignado_id = ? OR l.usuario_asignado_id IS NULL) AND l.estado IN ('nuevo','asignado')
+                WHERE l.usuario_asignado_id = ? AND l.estado IN ('nuevo','asignado')
                 GROUP BY l.id
                 ORDER BY l.ultimo_mensaje_at DESC
                 LIMIT 50
@@ -750,7 +751,7 @@ class CRMController
                 SELECT COUNT(*)
                 FROM crm_leads l
                 LEFT JOIN contactos c ON c.id = l.contacto_id
-                WHERE (l.usuario_asignado_id = ? OR l.usuario_asignado_id IS NULL)
+                WHERE l.usuario_asignado_id = ?
                   AND l.instancia_id        = ?
                   AND l.estado IN ('nuevo','asignado')
                   AND (c.tipo IS NULL OR c.tipo <> 'grupo')
