@@ -163,6 +163,7 @@ $router->get('/api/states/scheduled',         [StatesController::class, 'schedul
 $router->post('/api/states/schedule',         [StatesController::class, 'schedule'],       [$auth]);
 $router->post('/api/states/send-now', [StatesController::class, 'sendNow'], [$auth]);
 $router->delete('/api/states/scheduled/:id',  [StatesController::class, 'deleteScheduled'],[$auth]);
+$router->post('/api/states/upload-image',     [StatesController::class, 'uploadImage'],      [$auth]);
 
 // Broadcasts (Difusiones)
 $router->get('/api/broadcasts/lists', [BroadcastsController::class, 'lists'], [$auth]);

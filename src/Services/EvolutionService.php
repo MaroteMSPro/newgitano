@@ -348,7 +348,8 @@ class EvolutionService
             CURLOPT_URL            => $url,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_HTTPHEADER     => $headers,
-            CURLOPT_TIMEOUT        => 60,
+            CURLOPT_TIMEOUT        => 60,  # 1 min max
+            CURLOPT_CONNECTTIMEOUT => 60,
             CURLOPT_SSL_VERIFYPEER => false,
         ];
 

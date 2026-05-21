@@ -130,7 +130,7 @@ class StatesController
 
         $instIds   = array_filter(array_map('intval', $input['instancias_ids'] ?? []));
         $tipo      = in_array($input['tipo'] ?? '', ['text','image']) ? $input['tipo'] : 'text';
-        $contenido = trim($input['contenido'] ?? '');
+        $contenido = $this->saveBase64Image(trim($input['contenido'] ?? ''));
         $caption   = trim($input['caption'] ?? '');
         $fechaHora = trim($input['fecha_hora'] ?? '');
 
@@ -149,9 +149,10 @@ class StatesController
         }
 
         $fechaTs = strtotime($fechaHora);
-        if (!$fechaTs || $fechaTs < (time() + 60)) {
+        error_log('[States schedule] VALIDATION fechaHora=' . $fechaHora . ' fechaTs=' . ($fechaTs??0) . ' diff=' . (($fechaTs??0)-time()) . ' tz=' . date_default_timezone_get() . ' now=' . date('Y-m-d H:i:s'));
+if (!$fechaTs || $fechaTs < (time() + 300)) {
             http_response_code(400);
-            return ['error' => 'fecha_hora debe ser al menos 1 minuto en el futuro'];
+            return ['error' => 'fecha_hora debe ser al menos 5 minutos en el futuro'];
         }
 
         // Solo admin puede múltiples instancias
@@ -191,7 +192,7 @@ class StatesController
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ');
 
-        $total = 0;
+                $total = 0;
         foreach ($instIds as $instId) {
             $stmt->execute([
                 $instId, $userId, $tipo, $contenido,
@@ -201,7 +202,8 @@ class StatesController
             $total++;
         }
 
-        return ['ok' => true, 'total' => $total, 'grupo_masivo' => $grupoMasivo];
+        error_log('[States schedule] SUCCESS total=' . $total . ' grupo=' . ($grupoMasivo ?? 'none') . ' userId=' . $userId);
+return ['ok' => true, 'total' => $total, 'grupo_masivo' => $grupoMasivo];
     }
 
     /**
@@ -218,7 +220,7 @@ class StatesController
 
         $instIds   = array_filter(array_map('intval', $input['instancias_ids'] ?? []));
         $tipo      = in_array($input['tipo'] ?? '', ['text','image']) ? $input['tipo'] : 'text';
-        $contenido = trim($input['contenido'] ?? '');
+        $contenido = $this->saveBase64Image(trim($input['contenido'] ?? ''));
         $caption   = trim($input['caption'] ?? '');
 
         // Validaciones
@@ -280,7 +282,7 @@ class StatesController
 
             // Obtener contactos para statusJidList
             $stmtCont = $pdo->prepare(
-                "SELECT numero FROM contactos WHERE instancia_id = ? AND activo = 1 AND numero != '' AND LENGTH(numero) > 8 LIMIT 500"
+                "SELECT numero FROM contactos WHERE instancia_id = ? AND activo = 1 AND numero REGEXP '^[0-9]{10,15}$' AND (numero LIKE '549%' OR numero LIKE '54%') LIMIT 500"
             );
             $stmtCont->execute([$instId]);
             $nums    = $stmtCont->fetchAll(\PDO::FETCH_COLUMN);
@@ -355,67 +357,134 @@ class StatesController
         return ['ok' => true];
     }
 
+    // ==========================================
+    // UPLOAD IMAGE
+    // ==========================================
+
+    /**
+     * POST /api/states/upload-image
+     * Sube una imagen y devuelve la URL pública para usar en estados.
+     * Acepta multipart/form-data (archivo) o JSON (base64).
+     */
+    public function uploadImage(): array
+    {
+        $baseUrl = 'https://crm.luxom.com.ar/';
+        $uploadDir = 'assets/uploads/states/';
+        $fullDir = '/home/u695160153/domains/luxom.com.ar/public_html/crm/' . $uploadDir;
+
+        if (!is_dir($fullDir)) {
+            mkdir($fullDir, 0755, true);
+        }
+
+        // Multipart upload
+        if (!empty($_FILES['imagen'])) {
+            $file = $_FILES['imagen'];
+            $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+            if (!in_array($ext, ['jpg','jpeg','png','gif','webp'])) {
+                $ext = 'jpg';
+            }
+            $filename = 'state_' . time() . '_' . rand(1000,9999) . '.' . $ext;
+            if (!move_uploaded_file($file['tmp_name'], $fullDir . $filename)) {
+                http_response_code(500);
+                return ['error' => 'Error al guardar archivo'];
+            }
+        } else {
+            // Base64 from JSON body
+            $input = json_decode(file_get_contents('php://input'), true) ?? [];
+            $base64 = $input['imagen'] ?? $input['contenido'] ?? '';
+            if (empty($base64)) {
+                http_response_code(400);
+                return ['error' => 'imagen requerida (multipart o base64)'];
+            }
+
+            if (preg_match('/^data:image\/(\w+);base64,(.+)$/', $base64, $m)) {
+                $ext = $m[1] === 'jpeg' ? 'jpg' : $m[1];
+                $imageData = base64_decode($m[2]);
+            } else {
+                $imageData = base64_decode($base64);
+                $ext = 'jpg';
+            }
+
+            if ($imageData === false) {
+                http_response_code(400);
+                return ['error' => 'Base64 inválido'];
+            }
+
+            $filename = 'state_' . time() . '_' . rand(1000,9999) . '.' . $ext;
+            file_put_contents($fullDir . $filename, $imageData);
+        }
+
+        $url = $baseUrl . $uploadDir . $filename;
+
+        return ['ok' => true, 'url' => $url, 'filename' => $filename];
+    }
+
+    /**
+     * Convierte contenido base64 a URL de archivo subido.
+     */
+    private static function saveBase64Image(string $contenido): string
+    {
+        if (str_starts_with($contenido, 'http://') || str_starts_with($contenido, 'https://')) {
+            return $contenido;
+        }
+        if (!str_starts_with($contenido, 'data:image')) {
+            return $contenido;
+        }
+
+        $baseUrl = 'https://crm.luxom.com.ar/';
+        $uploadDir = 'assets/uploads/states/';
+        $fullDir = '/home/u695160153/domains/luxom.com.ar/public_html/crm/' . $uploadDir;
+
+        if (!is_dir($fullDir)) {
+            mkdir($fullDir, 0755, true);
+        }
+
+        if (preg_match('/^data:image\/(\w+);base64,(.+)$/', $contenido, $m)) {
+            $ext = $m[1] === 'jpeg' ? 'jpg' : $m[1];
+            $data = base64_decode($m[2]);
+            if ($data === false) return $contenido;
+            $filename = 'state_' . time() . '_' . rand(1000,9999) . '.' . $ext;
+            file_put_contents($fullDir . $filename, $data);
+            return $baseUrl . $uploadDir . $filename;
+        }
+
+        return $contenido;
+    }
+
+    // ==========================================
+    // PROCESAR PROGRAMADOS
+    // ==========================================
+
     /**
      * Método estático para boot: procesar estados pendientes con file lock de 60s.
      */
     public static function processScheduled(\PDO $db): void
     {
-        $lockFile = '/tmp/crm_states_lock';
+        // Quick check: hay estados pendientes?
+        $check = $db->prepare('SELECT COUNT(*) FROM estados_programados WHERE estado = ? AND fecha_hora <= NOW()');
+        $check->execute(['pendiente']);
+        $count = (int)$check->fetchColumn();
 
-        // File lock: ejecutar máximo 1 vez por minuto
-        if (file_exists($lockFile) && (time() - filemtime($lockFile)) < 60) {
-            return;
-        }
-        file_put_contents($lockFile, date('c'));
-
-        // Buscar estados pendientes cuya fecha_hora ya pasó
-        $stmt = $db->prepare('
-            SELECT ep.*, i.nombre AS instancia_nombre
-            FROM   estados_programados ep
-            JOIN   instancias i ON ep.instancia_id = i.id
-            WHERE  ep.estado = ? AND ep.fecha_hora <= NOW()
-            ORDER  BY ep.fecha_hora ASC
-            LIMIT  20
-        ');
-        $stmt->execute(['pendiente']);
-        $pendientes = $stmt->fetchAll();
-
-        if (empty($pendientes)) {
+        if ($count === 0) {
             return;
         }
 
-        $stmtOk  = $db->prepare("UPDATE estados_programados SET estado='publicado', publicado_at=NOW() WHERE id=?");
-        $stmtErr = $db->prepare("UPDATE estados_programados SET estado='error', error_msg=? WHERE id=?");
-
-        foreach ($pendientes as $ep) {
-            try {
-                // Obtener contactos para statusJidList
-                $stmtCont = $db->prepare(
-                    'SELECT numero FROM contactos WHERE instancia_id = ? AND activo = 1 AND numero != \'\' AND LENGTH(numero) > 8 LIMIT 500'
-                );
-                $stmtCont->execute([$ep['instancia_id']]);
-                $nums    = $stmtCont->fetchAll(\PDO::FETCH_COLUMN);
-                $jidList = array_values(array_map(fn($n) => $n . '@s.whatsapp.net', $nums));
-
-                $evo    = new EvolutionService($ep['instancia_nombre']);
-                $result = $evo->publicarEstado(
-                    $ep['tipo'],
-                    $ep['contenido'],
-                    $ep['caption'] ?? '',
-                    $jidList
-                );
-
-                if (!empty($result['success'])) {
-                    $stmtOk->execute([$ep['id']]);
-                } else {
-                    $errMsg = $result['data']['message'] ?? json_encode($result['data'] ?? []);
-                    $stmtErr->execute([substr($errMsg, 0, 500), $ep['id']]);
-                }
-            } catch (\Throwable $e) {
-                $stmtErr->execute([substr($e->getMessage(), 0, 500), $ep['id']]);
+        // Spawn background worker (solo si no hay uno activo)
+        $lockFile = '/tmp/crm_states_worker';
+        $lockPid  = @file_get_contents($lockFile);
+        $alreadyRunning = false;
+        if ($lockPid !== false) {
+            $lockPid = (int)trim($lockPid);
+            if ($lockPid > 0 && @file_exists("/proc/$lockPid")) {
+                $alreadyRunning = true;
             }
+        }
 
-            sleep(2);
+        if (!$alreadyRunning) {
+            $worker = dirname(__DIR__, 2) . '/process_states_worker.php';
+            if (file_exists($worker)) {
+                exec("nohup php $worker > /dev/null 2>&1 &");
+            }
         }
     }
 
@@ -441,7 +510,7 @@ class StatesController
         $input      = json_decode(file_get_contents('php://input'), true);
         $instIds    = array_filter(array_map('intval', $input['instancias_ids'] ?? []));
         $tipo       = $input['tipo'] ?? 'text';     // text | image
-        $contenido  = trim($input['contenido'] ?? '');
+        $contenido  = $this->saveBase64Image(trim($input['contenido'] ?? ''));
         $caption    = trim($input['caption'] ?? '');
         $usuarioId  = (int)($_REQUEST['_user_id'] ?? 0);
 
@@ -467,7 +536,7 @@ class StatesController
 
             // Obtener lista de contactos para statusJidList
             $stmtCont = $pdo->prepare(
-                'SELECT numero FROM contactos WHERE instancia_id = ? AND activo = 1 AND numero != \'\' AND LENGTH(numero) > 8 LIMIT 500'
+                'SELECT numero FROM contactos WHERE instancia_id = ? AND activo = 1 AND numero REGEXP \'^[0-9]{10,15}$\' AND (numero LIKE \'549%\' OR numero LIKE \'54%\') LIMIT 500'
             );
             $stmtCont->execute([$instId]);
             $contactos = $stmtCont->fetchAll(\PDO::FETCH_COLUMN);
@@ -550,7 +619,7 @@ class StatesController
 
         // Buscar contactos
         $stmtCont = $pdo->prepare(
-            "SELECT numero FROM contactos WHERE instancia_id = ? AND activo = 1 AND numero != '' AND LENGTH(numero) > 8 LIMIT 10"
+            "SELECT numero FROM contactos WHERE instancia_id = ? AND activo = 1 AND numero REGEXP '^[0-9]{10,15}$' AND (numero LIKE '549%' OR numero LIKE '54%') LIMIT 10"
         );
         $stmtCont->execute([$instId]);
         $nums    = $stmtCont->fetchAll(\PDO::FETCH_COLUMN);

@@ -24,13 +24,28 @@ class BroadcastsController
     public function lists(): array
     {
         $pdo = Database::connect();
-        $stmt = $pdo->query('
-            SELECT l.*, i.nombre as instancia_nombre, u.nombre as usuario_nombre
-            FROM difusion_listas l
-            LEFT JOIN instancias i ON l.instancia_id = i.id
-            LEFT JOIN usuarios u ON l.usuario_id = u.id
-            ORDER BY l.created_at DESC
-        ');
+        $userId = (int)($_REQUEST['_user_id'] ?? 0);
+        $userRol = $_REQUEST['_user_rol'] ?? '';
+
+        if ($userRol === 'admin') {
+            $stmt = $pdo->query('
+                SELECT l.*, i.nombre as instancia_nombre, u.nombre as usuario_nombre
+                FROM difusion_listas l
+                LEFT JOIN instancias i ON l.instancia_id = i.id
+                LEFT JOIN usuarios u ON l.usuario_id = u.id
+                ORDER BY l.created_at DESC
+            ');
+        } else {
+            $stmt = $pdo->prepare('
+                SELECT l.*, i.nombre as instancia_nombre, u.nombre as usuario_nombre
+                FROM difusion_listas l
+                LEFT JOIN instancias i ON l.instancia_id = i.id
+                LEFT JOIN usuarios u ON l.usuario_id = u.id
+                WHERE l.usuario_id = ?
+                ORDER BY l.created_at DESC
+            ');
+            $stmt->execute([$userId]);
+        }
         return ['lists' => $stmt->fetchAll()];
     }
 
@@ -90,6 +105,11 @@ class BroadcastsController
         $nombre      = trim($body['nombre'] ?? '');
         $instanciaId = (int)($body['instancia_id'] ?? 0);
         $descripcion = trim($body['descripcion'] ?? '');
+
+        if ($nombre === 'Clientes') {
+            http_response_code(400);
+            return ["error" => "\"Clientes\" es el nombre de la lista fija y se crea automáticamente al asignar usuarios."];
+        }
 
         // Los 3 buckets de destinatarios
         $contactIds = $body['contacto_ids'] ?? [];   // individuales (tabla contactos tipo=individual)
@@ -566,6 +586,20 @@ class BroadcastsController
     public function deleteList(string $id): array
     {
         $pdo = Database::connect();
+
+        // Bloquear eliminación de listas fijas
+        $check = $pdo->prepare("SELECT fija FROM difusion_listas WHERE id = ?");
+        $check->execute([$id]);
+        $list = $check->fetch();
+        if (!$list) {
+            http_response_code(404);
+            return ["error" => "Lista no encontrada"];
+        }
+        if ((int)$list["fija"] === 1) {
+            http_response_code(403);
+            return ["error" => "No se puede eliminar la lista fija Clientes"];
+        }
+
         $pdo->beginTransaction();
         try {
             // Borrar detalles de los envíos primero
@@ -797,7 +831,7 @@ class BroadcastsController
                 FROM difusion_envios e
                 JOIN difusion_listas l ON l.id = e.lista_id
                 WHERE e.estado = 'pendiente'
-                  AND e.programado_para <= NOW()
+                  AND (e.programado_para <= NOW() OR e.programado_para IS NULL)
                 ORDER BY e.programado_para ASC
                 LIMIT ?
             ");
@@ -1343,4 +1377,97 @@ class BroadcastsController
             ],
         ];
     }
+
+
+    /**
+     * Asegura que exista la lista fija "Clientes" para un usuario + instancia.
+     */
+    public static function ensureFixedList(\PDO $pdo, int $usuarioId, int $instanciaId): int
+    {
+        $check = $pdo->prepare("SELECT id FROM difusion_listas WHERE usuario_id = ? AND instancia_id = ? AND fija = 1");
+        $check->execute([$usuarioId, $instanciaId]);
+        if ($existing = $check->fetch()) {
+            return (int)$existing["id"];
+        }
+        $ins = $pdo->prepare("INSERT INTO difusion_listas (instancia_id, usuario_id, nombre, fija, total_contactos) VALUES (?, ?, ?, 1, 0)");
+        $ins->execute([$instanciaId, $usuarioId, "Clientes"]);
+        return (int)$pdo->lastInsertId();
+    }
+
+    /**
+     * Admin: envía un mensaje a TODAS las listas fijas "Clientes" de todos los usuarios.
+     */
+    public function sendToAllFixedLists(): array
+    {
+        $pdo = Database::connect();
+        $body = json_decode(file_get_contents("php://input"), true) ?? [];
+
+        $tipo      = $body["tipo"] ?? "mensaje";
+        $contenido = trim($body["contenido"] ?? "");
+        $mediaUrl  = $body["media_url"] ?? null;
+        $mediaMime = $body["media_mime"] ?? null;
+        $mediaName = $body["media_name"] ?? null;
+        $delayMin  = max(1, (int)($body["delay_min"] ?? 5));
+        $delayMax  = max($delayMin, (int)($body["delay_max"] ?? 15));
+
+        if ($tipo === "mensaje" && !$contenido) {
+            http_response_code(400);
+            return ["error" => "Contenido requerido"];
+        }
+        if ($tipo !== "mensaje" && !$mediaUrl) {
+            http_response_code(400);
+            return ["error" => "Se requiere adjunto"];
+        }
+
+        $lists = $pdo->query("SELECT l.id, l.total_contactos, l.usuario_id, l.instancia_id
+            FROM difusion_listas l WHERE l.fija = 1 ORDER BY l.usuario_id, l.instancia_id");
+
+        $creados = 0;
+        $vacios = 0;
+        $errores = [];
+
+        foreach ($lists as $list) {
+            $total = (int)$list["total_contactos"];
+            if ($total === 0) {
+                $vacios++;
+                continue;
+            }
+
+            try {
+                $stmt = $pdo->prepare("
+                    INSERT INTO difusion_envios
+                        (lista_id, usuario_id, tipo, contenido, media_url, media_mime, media_name,
+                         delay_min, delay_max, estado, programado_para, total, modo_envio_grupo)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pendiente', NOW(), ?, 'al_grupo')
+                ");
+                $stmt->execute([
+                    (int)$list["id"],
+                    (int)$list["usuario_id"],
+                    $tipo,
+                    $contenido,
+                    $mediaUrl,
+                    $mediaMime,
+                    $mediaName,
+                    $delayMin,
+                    $delayMax,
+                    $total,
+                ]);
+                $creados++;
+            } catch (\Throwable $e) {
+                $errores[] = "Lista #{$list["id"]}: " . $e->getMessage();
+            }
+        }
+
+        $spawned = self::spawnProcessor();
+
+        return [
+            "ok" => true,
+            "creados" => $creados,
+            "vacios" => $vacios,
+            "errores" => $errores,
+            "spawned" => $spawned,
+            "msg" => "Se crearon {$creados} envíos ({$vacios} listas vacías saltadas)",
+        ];
+    }
+
 }

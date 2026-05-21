@@ -97,7 +97,7 @@ class InstancesController
             return ['error' => $e->getMessage()];
         }
 
-        $webhookUrl = $_ENV['WEBHOOK_URL'] ?? ('https://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . '/api/webhook');
+        $webhookUrl = 'https://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . '/api/webhook';
         $evoResult  = $evo->crearInstancia($nombre, $webhookUrl);
 
         // Evolution v2 devuelve data.instance + data.hash
@@ -388,6 +388,12 @@ class InstancesController
         ");
         foreach ($items as $it) {
             $stmt->execute([$it['id'], (int)$id, $it['max']]);
+            // Auto-crear lista fija Clientes para este usuario+instancia
+            try {
+                \App\Controllers\BroadcastsController::ensureFixedList($pdo, $it['id'], (int)$id);
+            } catch (\Throwable $e) {
+                error_log("[setUsers] ensureFixedList: " . $e->getMessage());
+            }
         }
 
         return ['ok' => true, 'count' => count($items)];
@@ -420,7 +426,7 @@ class InstancesController
             return ['error' => $e->getMessage()];
         }
 
-        $webhookUrl = $_ENV['WEBHOOK_URL'] ?? ('https://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . '/api/webhook');
+        $webhookUrl = 'https://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . '/api/webhook';
         $eventos    = ['MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'CONNECTION_UPDATE', 'SEND_MESSAGE'];
 
         $result = $evo->configurarWebhook($webhookUrl, $eventos);

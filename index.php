@@ -11,7 +11,7 @@ header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
 
 // Timezone Argentina
-date_default_timezone_set("America/Argentina/Buenos_Aires");
+
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(204);
     exit;
@@ -68,6 +68,8 @@ use App\Middleware\Auth;
 // Load base env (JWT_SECRET, APP_ENV, etc. — sin credenciales de DB)
 Env::load(__DIR__ . '/.env');
 
+date_default_timezone_set($_ENV['TIMEZONE'] ?? 'America/Argentina/Buenos_Aires');
+
 // Validate license + inject DB credentials from ControlCRM
 License::boot();
 
@@ -78,7 +80,7 @@ try {
         $_ENV['DB_USER'], $_ENV['DB_PASS'],
         [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
     );
-    $migrationsDb->exec("SET time_zone = '-03:00'");
+    $migrationsDb->exec("SET time_zone = '" . ($_ENV["DB_TIMEZONE"] ?? "-03:00") . "'");
     (new \App\Core\Migrations($migrationsDb))->run();
 } catch (\Throwable $e) {
     error_log('[Migrations boot] ' . $e->getMessage());
@@ -171,6 +173,7 @@ $router->post('/api/states/schedule',         [StatesController::class, 'schedul
 $router->post('/api/states/send-now',          [StatesController::class, 'sendNow'],        [$auth]);
 $router->post('/api/states/test-send',         [StatesController::class, 'testSend'],       [$auth]);
 $router->delete('/api/states/scheduled/:id',  [StatesController::class, 'deleteScheduled'],[$auth]);
+$router->post('/api/states/upload-image', [StatesController::class, 'uploadImage'], [$auth]);
 
 // Broadcasts (Difusiones)
 $router->get('/api/broadcasts/lists',              [BroadcastsController::class, 'lists'],               [$auth]);
@@ -179,6 +182,7 @@ $router->post('/api/broadcasts/lists',             [BroadcastsController::class,
 $router->post('/api/broadcasts/lists/:id/destinos',[BroadcastsController::class, 'addDestinos'],         [$auth]);
 $router->post('/api/broadcasts/lists/:id/send',    [BroadcastsController::class, 'sendToList'],          [$auth]);
 $router->delete('/api/broadcasts/lists/:id',       [BroadcastsController::class, 'deleteList'],          [$auth]);
+$router->post('/api/broadcasts/send-to-all-fixed',  [BroadcastsController::class, 'sendToAllFixedLists'], [$admin]);
 $router->get('/api/broadcasts/contacts',           [BroadcastsController::class, 'contactsForInstance'], [$auth]);
 $router->post('/api/broadcasts/validate-numbers',  [BroadcastsController::class, 'validateNumbers'],     [$auth]);
 $router->get('/api/broadcasts/scheduled',          [BroadcastsController::class, 'scheduled'],           [$auth]);

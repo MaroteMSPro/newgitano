@@ -69,8 +69,8 @@ class SyncController
 
         $stmtSelect = $pdo->prepare('SELECT id FROM contactos WHERE instancia_id = ? AND numero = ?');
         $stmtInsert = $pdo->prepare('
-            INSERT INTO contactos (instancia_id, numero, nombre, origen, activo, created_at)
-            VALUES (?, ?, ?, \'sync\', 1, NOW())
+            INSERT INTO contactos (instancia_id, numero, nombre, tipo, origen, activo, created_at)
+            VALUES (?, ?, ?, ?, \'sync\', 1, NOW())
         ');
         $stmtUpdate = $pdo->prepare('
             UPDATE contactos SET nombre = ?, updated_at = NOW() WHERE instancia_id = ? AND numero = ?
@@ -95,7 +95,17 @@ class SyncController
                     $stmtUpdate->execute([$nombre, $instanciaId, $numero]);
                     $actualizados++;
                 } else {
-                    $stmtInsert->execute([$instanciaId, $numero, $nombre]);
+                    // Determinar tipo desde la API
+                $isGroup = !empty($c['isGroup']);
+                $type    = $c['type'] ?? '';
+                if ($isGroup || $type === 'group') {
+                    $tipo = 'grupo';
+                } elseif ($type === 'broadcast') {
+                    $tipo = 'difusion';
+                } else {
+                    $tipo = 'individual';
+                }
+                $stmtInsert->execute([$instanciaId, $numero, $nombre, $tipo]);
                     $importados++;
                 }
             } catch (\Throwable $e) {
@@ -103,13 +113,30 @@ class SyncController
             }
         }
 
+        // Crear leads para contactos individuales que aun no tengan lead
+        $leadsCreados = 0;
+        $leadStmt = $pdo->prepare("
+            INSERT INTO crm_leads (instancia_id, contacto_id, numero, nombre, estado, created_at, updated_at)
+            SELECT ?, c.id, c.numero, c.nombre, 'nuevo', NOW(), NOW()
+            FROM contactos c
+            LEFT JOIN crm_leads l ON l.contacto_id = c.id AND l.instancia_id = c.instancia_id
+            WHERE c.instancia_id = ? AND c.tipo = 'individual' AND l.id IS NULL
+        ");
+        try {
+            $leadStmt->execute([$instanciaId, $instanciaId]);
+            $leadsCreados = $leadStmt->rowCount();
+        } catch (\Throwable $e) {
+            // Contact sync already succeeded, lead creation is best-effort
+        }
+
         return [
-            'ok'          => true,
-            'instancia'   => $inst['nombre'],
-            'total'       => count($rawContacts),
-            'importados'  => $importados,
-            'actualizados' => $actualizados,
-            'errores'     => $errores,
+            'ok'           => true,
+            'instancia'    => $inst['nombre'],
+            'total'        => count($rawContacts),
+            'importados'   => $importados,
+            'actualizados'  => $actualizados,
+            'errores'      => $errores,
+            'leads_creados' => $leadsCreados,
         ];
     }
 

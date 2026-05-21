@@ -9,18 +9,18 @@ class BibliotecaController
     public function categories(): array
     {
         $pdo = Database::connect();
-        $cats = $pdo->query('
+        $cats = $pdo->query("
             SELECT c.*, COUNT(a.id) as archivos_count
             FROM crm_biblioteca_categorias c
             LEFT JOIN crm_biblioteca_archivos a ON a.categoria_id = c.id AND a.activo = 1
             WHERE c.activa = 1
             GROUP BY c.id
             ORDER BY c.orden, c.nombre
-        ')->fetchAll();
+        ")->fetchAll();
         return ['categories' => $cats];
     }
 
-    public function files(): array
+public function files(): array
     {
         $categoriaId = $_GET['categoria_id'] ?? null;
         $pdo = Database::connect();
@@ -50,9 +50,10 @@ class BibliotecaController
         if (!$nombre) { http_response_code(400); return ['error' => 'Nombre requerido']; }
 
         $pdo = Database::connect();
+        $instanciaId = isset($body['instancia_id']) && $body['instancia_id'] > 0 ? (int)$body['instancia_id'] : null;
         $stmt = $pdo->prepare('INSERT INTO crm_biblioteca_categorias (instancia_id, nombre, icono, orden, activa) VALUES (?, ?, ?, 99, 1)');
         $stmt->execute([
-            $body['instancia_id'] ?? 1,
+            $instanciaId,
             $nombre,
             $body['icono'] ?? '📁',
         ]);
@@ -63,8 +64,9 @@ class BibliotecaController
     {
         $body = json_decode(file_get_contents('php://input'), true);
         $pdo = Database::connect();
+        $instanciaId = isset($body['instancia_id']) && $body['instancia_id'] > 0 ? (int)$body['instancia_id'] : null;
         $pdo->prepare('UPDATE crm_biblioteca_categorias SET nombre = ?, icono = ?, instancia_id = ? WHERE id = ?')
-            ->execute([$body['nombre'] ?? '', $body['icono'] ?? '📁', $body['instancia_id'] ?? 1, $id]);
+            ->execute([$body['nombre'] ?? '', $body['icono'] ?? '📁', $instanciaId, $id]);
         return ['ok' => true];
     }
 

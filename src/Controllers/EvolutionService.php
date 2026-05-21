@@ -230,10 +230,13 @@ class EvolutionService
         }
         if (!empty($jidList)) {
             $body['statusJidList'] = $jidList;
+            $body['allContacts'] = false;
+        } else {
+            $body['allContacts'] = true;
         }
         if ($tipo === 'text') {
             $body['backgroundColor'] = '#075E54';
-            $body['font'] = 0;
+            $body['font'] = 1;
         }
         return $this->request('POST', "/message/sendStatus/{$this->instance}", $body);
     }
@@ -296,7 +299,7 @@ class EvolutionService
             CURLOPT_URL            => $url,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_HTTPHEADER     => $headers,
-            CURLOPT_TIMEOUT        => 30,
+            CURLOPT_TIMEOUT        => 60,
             CURLOPT_SSL_VERIFYPEER => false,
         ];
 
