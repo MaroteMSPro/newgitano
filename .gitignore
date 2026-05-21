@@ -10,3 +10,7 @@ error_log
 *.backup*
 *.bak
 *.backup_*
+
+# Deploy
+to-deploy.txt
+deploy-credentials*

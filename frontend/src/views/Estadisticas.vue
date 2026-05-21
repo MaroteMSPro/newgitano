@@ -63,12 +63,12 @@
                 <td class="td-neg">{{ v.cerrados_neg }}</td>
                 <td>
                   <div class="bar-wrap">
-                    <div class="bar-fill" :style="{ width: Math.min(v.tasa_cierre, 100) + % }"></div>
+                    <div class="bar-fill" :style="{ width: Math.min(v.tasa_cierre, 100) + '%' }"></div>
                   </div>
                   <span class="bar-label">{{ v.tasa_cierre }}%</span>
                 </td>
                 <td>{{ v.msgs_enviados }}</td>
-                <td>{{ v.prom_resp_seg ? fmtSec(v.prom_resp_seg) : — }}</td>
+                <td>{{ v.prom_resp_seg ? fmtSec(v.prom_resp_seg) : '—' }}</td>
                 <td>{{ v.activos }}</td>
               </tr>
               <tr v-if="!vendedores.length">
